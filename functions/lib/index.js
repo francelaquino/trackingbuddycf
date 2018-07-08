@@ -26,19 +26,21 @@ exports.saveLocation = functions.https.onRequest((request, response) => {
     let address = request.query.address;
     let userid = request.query.userid;
     let dateadded = request.query.dateadded;
-    return new Promise((resolve, reject) => {
+    let parentPromise = new Promise((resolve, reject) => {
         db.ref("users/" + userid).once("value").then(function (snapshot) {
             if (snapshot.val() !== null && snapshot.val().latitude != undefined && snapshot.val().longitude != undefined) {
                 lat2 = snapshot.val().latitude;
                 lon2 = snapshot.val().longitude;
+                console.log(lat2);
+                console.log(lon2);
                 resolve();
             }
             else {
                 resolve();
             }
         });
-    }).then(function () {
-        if (lat2 === "" || lon2 === "" || lat2 == undefined || lon2 == undefined) {
+    }).then(() => {
+        if (lat2 == "" || lon2 == "" || lat2 === undefined || lon2 == undefined) {
             db.ref('locations/' + userid).push({
                 lat: lat1,
                 lon: lon1,
@@ -53,21 +55,25 @@ exports.saveLocation = functions.https.onRequest((request, response) => {
             });
         }
         else {
-            let movement = getDistance(Number(lat1), Number(lon1), Number(lat2), Number(lon2));
-            if (movement >= 10) {
-                db.ref('locations/' + userid).push({
-                    lat: lat1,
-                    lon: lon1,
-                    address: address,
-                    dateadded: dateadded
-                });
-                db.ref("users").child(userid).update({
-                    address: address,
-                    latitude: lat1,
-                    longitude: lon1,
-                    lastmovement: dateadded
-                });
-            }
+            let childPromise = new Promise((resolve, reject) => {
+                let movement = getDistance(Number(lat1), Number(lon1), Number(lat2), Number(lon2));
+                resolve(movement);
+            }).then(function (movement) {
+                if (Number(movement) >= 10) {
+                    db.ref('locations/' + userid).push({
+                        lat: lat1,
+                        lon: lon1,
+                        address: address,
+                        dateadded: dateadded
+                    });
+                    db.ref("users").child(userid).update({
+                        address: address,
+                        latitude: lat1,
+                        longitude: lon1,
+                        lastmovement: dateadded
+                    });
+                }
+            });
         }
         response.send("Location saved");
     });
