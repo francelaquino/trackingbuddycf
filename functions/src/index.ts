@@ -24,17 +24,7 @@ const getDistance=(lat1,long1,lat2,long2) => {
     return d; 
   };
 
-
-
-  
-app.get('/appendLocation', async function (req, res) {
-    let lat1=req.query.lat;
-    let lon1=req.query.lon;
-    let address = req.query.address;
-    let userid=req.query.userid;
-    let dateadded=req.query.dateadded;
-    let firstname=req.query.firstname;
-
+  async function  processPlaceAlert(lat1,lon1,address,userid,firstname){
     let placeArriveNotify:any=[];
     let placeLeftNotify:any=[];
     await db.ref("placealert/"+userid).once("value").then(async function(snapshot) {
@@ -47,7 +37,7 @@ app.get('/appendLocation', async function (req, res) {
                         placeid : childSnapshot.val().placeid,
                         latitude : childSnapshot.val().latitude,
                         longitude : childSnapshot.val().longitude,
-                        userid : req.query.userid
+                        userid : userid
                     })
                    
                 }
@@ -58,7 +48,7 @@ app.get('/appendLocation', async function (req, res) {
                     placeid : childSnapshot.val().placeid,
                     latitude : childSnapshot.val().latitude,
                     longitude : childSnapshot.val().longitude,
-                    userid : req.query.userid
+                    userid : userid
                 })
             }
         });
@@ -122,22 +112,20 @@ app.get('/appendLocation', async function (req, res) {
                 });
             });
         }
-       // await placeArriveNotify.forEach((place) =>{
-            //await db.ref('currentplace/'+place.placeowner+'/'+place.userid+'/'+place.placeid).on("value").then(function(dataSnapshot) {
-               // console.log(dataSnapshot.val());
-               /* await dataSnapshot.forEach((childSnapshot) =>{
-                   
-                });*/
-            
-            //});
+}
 
-            /* db.ref('currentplace/'+place.placeowner+'/'+place.userid+'/'+place.placeid).set({ 
-                address : address,
-                latitude : place.latitude,
-                longitude : place.longitude,
-                dateadded :  Date.now()});
-        });*/
+  
+app.get('/appendLocation', async function (req, res) {
+    let lat1=req.query.lat;
+    let lon1=req.query.lon;
+    let address = req.query.address;
+    let userid=req.query.userid;
+    let dateadded=req.query.dateadded;
+    let firstname=req.query.firstname;
+    
+    processPlaceAlert(lat1,lon1,address,userid,firstname);
 
+    
         res.send("Done");
         
 
