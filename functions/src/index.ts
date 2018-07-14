@@ -2,6 +2,23 @@ import * as functions from 'firebase-functions';
 const admin = require('firebase-admin');
 const cors = require("cors")
 const express = require('express');
+const maps = require('@google/maps')/*
+var googleMapsClient = require('@google/maps').createClient({
+    key: 'xxx',
+    Promise: Promise
+  });
+
+  console.log(snapadd + " snap user address (((((((())))))))");
+  if(snapadd != null || typeof snapadd != undefined) {
+          googleMapsClient.geocode({
+            address: snapadd
+          }).asPromise()
+              .then(response =>  console.log(response.json.results));
+              .catch(err => console.log(err))
+  }   
+//}))
+//console.log(typeof user + 'type of');
+*/
 
 admin.initializeApp(functions.config().firebase);
 
@@ -23,8 +40,7 @@ const getDistance=(lat1,long1,lat2,long2) => {
       let d = R * c;
     return d; 
   };
-
-  async function  processPlaceAlert(lat1,lon1,address,userid,firstname){
+  const processPlaceAlert=async (lat1,lon1,address,userid,firstname)=>{
     let placeArriveNotify:any=[];
     let placeLeftNotify:any=[];
     await db.ref("placealert/"+userid).once("value").then(async function(snapshot) {
@@ -114,7 +130,54 @@ const getDistance=(lat1,long1,lat2,long2) => {
         }
 }
 
-  
+const saveLocation=async (lat1,lon1,address,userid,dateadded)=>{
+    let lat2="";
+    let lon2="";
+
+   
+    
+    await db.ref("users/"+userid).once("value").then(function(snapshot) {
+            if(snapshot.val()!==null && snapshot.val().latitude!=undefined && snapshot.val().longitude!=undefined){
+                lat2=snapshot.val().latitude;
+                lon2=snapshot.val().longitude;
+            }
+            
+        });
+    
+        if(lat2=="" || lon2=="" || lat2===undefined || lon2==undefined){
+            await db.ref('locations/'+userid).push({ 
+                lat : lat1,
+                lon : lon1,
+                address : address,
+                dateadded : dateadded});
+            
+            await db.ref("users").child(userid).update({
+                    address:address,
+                    latitude:lat1,
+                    longitude:lon1,
+                    lastmovement : dateadded
+                })
+
+        }else{
+                let distance = await getDistance(Number(lat1),Number(lon1),Number(lat2),Number(lon2));
+                
+                if(Number(distance)>=10){
+                    
+                    await db.ref('locations/'+userid).push({ 
+                        lat : lat1,
+                        lon : lon1,
+                        address : address,
+                        dateadded : dateadded});
+                    
+                    await db.ref("users").child(userid).update({
+                            address:address,
+                            latitude:lat1,
+                            longitude:lon1,
+                            lastmovement : dateadded
+                        })
+                }
+        }
+}
 app.get('/appendLocation', async function (req, res) {
     let lat1=req.query.lat;
     let lon1=req.query.lon;
@@ -123,11 +186,15 @@ app.get('/appendLocation', async function (req, res) {
     let dateadded=req.query.dateadded;
     let firstname=req.query.firstname;
     
-    processPlaceAlert(lat1,lon1,address,userid,firstname);
+    await processPlaceAlert(lat1,lon1,address,userid,firstname);
+    await saveLocation(lat1,lon1,address,userid,dateadded);
+    let geocoder = new maps.Geocoder;
+    let latlng = {lat:  parseFloat(lat1), lng: parseFloat(lon1)};
 
-    
-        res.send("Done");
-        
+    geocoder.geocode({'location': latlng}, function(results, status) {
+        res.send(results);
+      });
+        res.send("updated");
 
     
  })

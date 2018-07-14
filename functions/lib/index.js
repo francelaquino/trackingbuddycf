@@ -12,6 +12,7 @@ const functions = require("firebase-functions");
 const admin = require('firebase-admin');
 const cors = require("cors");
 const express = require('express');
+const maps = require('@google/maps');
 admin.initializeApp(functions.config().firebase);
 const router = express.Router();
 const db = admin.database();
@@ -30,6 +31,134 @@ const getDistance = (lat1, long1, lat2, long2) => {
     let d = R * c;
     return d;
 };
+const processPlaceAlert = (lat1, lon1, address, userid, firstname) => __awaiter(this, void 0, void 0, function* () {
+    let placeArriveNotify = [];
+    let placeLeftNotify = [];
+    yield db.ref("placealert/" + userid).once("value").then(function (snapshot) {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield snapshot.forEach((childSnapshot) => {
+                if (childSnapshot.val().arrives === true) {
+                    let distance = getDistance(Number(lat1), Number(lon1), Number(childSnapshot.val().latitude), Number(childSnapshot.val().longitude));
+                    if (Number(distance) <= 10) {
+                        placeArriveNotify.push({
+                            placeowner: childSnapshot.val().placeowner,
+                            placeid: childSnapshot.val().placeid,
+                            latitude: childSnapshot.val().latitude,
+                            longitude: childSnapshot.val().longitude,
+                            userid: userid
+                        });
+                    }
+                }
+                if (childSnapshot.val().leaves === true) {
+                    placeLeftNotify.push({
+                        placeowner: childSnapshot.val().placeowner,
+                        placeid: childSnapshot.val().placeid,
+                        latitude: childSnapshot.val().latitude,
+                        longitude: childSnapshot.val().longitude,
+                        userid: userid
+                    });
+                }
+            });
+        });
+    });
+    if (placeArriveNotify.length > 0) {
+        yield placeArriveNotify.forEach((place) => __awaiter(this, void 0, void 0, function* () {
+            yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).once("value", function (dataSnapshot) {
+                return __awaiter(this, void 0, void 0, function* () {
+                    if (dataSnapshot.val() === null) {
+                        yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).set({
+                            address: address,
+                            latitude: place.latitude,
+                            longitude: place.longitude,
+                            arrives: true,
+                            leaves: false,
+                            datearrived: Date.now()
+                        });
+                        yield db.ref('places/' + place.placeowner + '/' + place.placeid).once("value", function (placeSnapshot) {
+                            return __awaiter(this, void 0, void 0, function* () {
+                                let message = firstname + " arrives " + placeSnapshot.val().placename;
+                                yield db.ref('notification/placealert/' + place.placeowner).push({
+                                    placename: placeSnapshot.val().placename,
+                                    address: placeSnapshot.val().address,
+                                    message: message,
+                                    action: 'arrives',
+                                    dateadded: Date.now()
+                                });
+                            });
+                        });
+                    }
+                });
+            });
+        }));
+    }
+    if (placeLeftNotify.length > 0) {
+        yield placeLeftNotify.forEach((place) => __awaiter(this, void 0, void 0, function* () {
+            yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).once("value", function (dataSnapshot) {
+                return __awaiter(this, void 0, void 0, function* () {
+                    if (dataSnapshot.val() !== null) {
+                        let distance = getDistance(Number(lat1), Number(lon1), Number(dataSnapshot.val().latitude), Number(dataSnapshot.val().longitude));
+                        if (Number(distance) > 11) {
+                            yield db.ref('places/' + place.placeowner + '/' + place.placeid).once("value", function (placeSnapshot) {
+                                return __awaiter(this, void 0, void 0, function* () {
+                                    let message = firstname + " leaves " + placeSnapshot.val().placename;
+                                    yield db.ref('notification/placealert/' + place.placeowner).push({
+                                        placename: placeSnapshot.val().placename,
+                                        address: placeSnapshot.val().address,
+                                        message: message,
+                                        action: 'leaves',
+                                        dateadded: Date.now()
+                                    });
+                                    yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).remove();
+                                });
+                            });
+                        }
+                    }
+                });
+            });
+        }));
+    }
+});
+const saveLocation = (lat1, lon1, address, userid, dateadded) => __awaiter(this, void 0, void 0, function* () {
+    let lat2 = "";
+    let lon2 = "";
+    yield db.ref("users/" + userid).once("value").then(function (snapshot) {
+        if (snapshot.val() !== null && snapshot.val().latitude != undefined && snapshot.val().longitude != undefined) {
+            lat2 = snapshot.val().latitude;
+            lon2 = snapshot.val().longitude;
+        }
+    });
+    if (lat2 == "" || lon2 == "" || lat2 === undefined || lon2 == undefined) {
+        yield db.ref('locations/' + userid).push({
+            lat: lat1,
+            lon: lon1,
+            address: address,
+            dateadded: dateadded
+        });
+        yield db.ref("users").child(userid).update({
+            address: address,
+            latitude: lat1,
+            longitude: lon1,
+            lastmovement: dateadded
+        });
+    }
+    else {
+        let distance = yield getDistance(Number(lat1), Number(lon1), Number(lat2), Number(lon2));
+        if (Number(distance) >= 10) {
+            yield db.ref('locations/' + userid).push({
+                lat: lat1,
+                lon: lon1,
+                address: address,
+                dateadded: dateadded
+            });
+            yield db.ref("users").child(userid).update({
+                address: address,
+                latitude: lat1,
+                longitude: lon1,
+                lastmovement: dateadded
+            });
+        }
+    }
+});
 app.get('/appendLocation', function (req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         let lat1 = req.query.lat;
@@ -38,105 +167,14 @@ app.get('/appendLocation', function (req, res) {
         let userid = req.query.userid;
         let dateadded = req.query.dateadded;
         let firstname = req.query.firstname;
-        let placeArriveNotify = [];
-        let placeLeftNotify = [];
-        yield db.ref("placealert/" + userid).once("value").then(function (snapshot) {
-            return __awaiter(this, void 0, void 0, function* () {
-                yield snapshot.forEach((childSnapshot) => {
-                    if (childSnapshot.val().arrives === true) {
-                        let distance = getDistance(Number(lat1), Number(lon1), Number(childSnapshot.val().latitude), Number(childSnapshot.val().longitude));
-                        if (Number(distance) <= 10) {
-                            placeArriveNotify.push({
-                                placeowner: childSnapshot.val().placeowner,
-                                placeid: childSnapshot.val().placeid,
-                                latitude: childSnapshot.val().latitude,
-                                longitude: childSnapshot.val().longitude,
-                                userid: req.query.userid
-                            });
-                        }
-                    }
-                    if (childSnapshot.val().leaves === true) {
-                        placeLeftNotify.push({
-                            placeowner: childSnapshot.val().placeowner,
-                            placeid: childSnapshot.val().placeid,
-                            latitude: childSnapshot.val().latitude,
-                            longitude: childSnapshot.val().longitude,
-                            userid: req.query.userid
-                        });
-                    }
-                });
-            });
+        yield processPlaceAlert(lat1, lon1, address, userid, firstname);
+        yield saveLocation(lat1, lon1, address, userid, dateadded);
+        let geocoder = new maps.Geocoder;
+        let latlng = { lat: parseFloat(lat1), lng: parseFloat(lon1) };
+        geocoder.geocode({ 'location': latlng }, function (results, status) {
+            res.send(results);
         });
-        if (placeArriveNotify.length > 0) {
-            yield placeArriveNotify.forEach((place) => __awaiter(this, void 0, void 0, function* () {
-                yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).once("value", function (dataSnapshot) {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        if (dataSnapshot.val() === null) {
-                            yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).set({
-                                address: address,
-                                latitude: place.latitude,
-                                longitude: place.longitude,
-                                arrives: true,
-                                leaves: false,
-                                datearrived: Date.now()
-                            });
-                            yield db.ref('places/' + place.placeowner + '/' + place.placeid).once("value", function (placeSnapshot) {
-                                return __awaiter(this, void 0, void 0, function* () {
-                                    let message = firstname + " arrives " + placeSnapshot.val().placename;
-                                    yield db.ref('notification/placealert/' + place.placeowner).push({
-                                        placename: placeSnapshot.val().placename,
-                                        address: placeSnapshot.val().address,
-                                        message: message,
-                                        action: 'arrives',
-                                        dateadded: Date.now()
-                                    });
-                                });
-                            });
-                        }
-                    });
-                });
-            }));
-        }
-        if (placeLeftNotify.length > 0) {
-            yield placeLeftNotify.forEach((place) => __awaiter(this, void 0, void 0, function* () {
-                yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).once("value", function (dataSnapshot) {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        if (dataSnapshot.val() !== null) {
-                            let distance = getDistance(Number(lat1), Number(lon1), Number(dataSnapshot.val().latitude), Number(dataSnapshot.val().longitude));
-                            if (Number(distance) > 11) {
-                                yield db.ref('places/' + place.placeowner + '/' + place.placeid).once("value", function (placeSnapshot) {
-                                    return __awaiter(this, void 0, void 0, function* () {
-                                        let message = firstname + " leaves " + placeSnapshot.val().placename;
-                                        yield db.ref('notification/placealert/' + place.placeowner).push({
-                                            placename: placeSnapshot.val().placename,
-                                            address: placeSnapshot.val().address,
-                                            message: message,
-                                            action: 'leaves',
-                                            dateadded: Date.now()
-                                        });
-                                        yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).remove();
-                                    });
-                                });
-                            }
-                        }
-                    });
-                });
-            }));
-        }
-        // await placeArriveNotify.forEach((place) =>{
-        //await db.ref('currentplace/'+place.placeowner+'/'+place.userid+'/'+place.placeid).on("value").then(function(dataSnapshot) {
-        // console.log(dataSnapshot.val());
-        /* await dataSnapshot.forEach((childSnapshot) =>{
-            
-         });*/
-        //});
-        /* db.ref('currentplace/'+place.placeowner+'/'+place.userid+'/'+place.placeid).set({
-            address : address,
-            latitude : place.latitude,
-            longitude : place.longitude,
-            dateadded :  Date.now()});
-    });*/
-        res.send("Done");
+        res.send("updated");
     });
 });
 const api = functions.https.onRequest(app);
