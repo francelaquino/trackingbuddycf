@@ -1,0 +1,27 @@
+[debug] [2018-07-20T19:06:38.166Z] ----------------------------------------------------------------------
+[debug] [2018-07-20T19:06:38.170Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Virtual Dimension\AppData\Roaming\npm\node_modules\firebase-tools\bin\firebase deploy
+[debug] [2018-07-20T19:06:38.171Z] CLI Version:   3.18.6
+[debug] [2018-07-20T19:06:38.171Z] Platform:      win32
+[debug] [2018-07-20T19:06:38.171Z] Node Version:  v9.11.1
+[debug] [2018-07-20T19:06:38.172Z] Time:          Fri Jul 20 2018 22:06:38 GMT+0300 (Arab Standard Time)
+[debug] [2018-07-20T19:06:38.172Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2018-07-20T19:06:38.225Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2018-07-20T19:06:38.226Z] > authorizing via signed-in user
+[debug] [2018-07-20T19:06:38.230Z] > refreshing access token with scopes: ["email","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","openid"]
+[debug] [2018-07-20T19:06:38.231Z] >>> HTTP REQUEST POST https://www.googleapis.com/oauth2/v3/token  
+ { refresh_token: '1/vFXjtTM_nwaGpLpS73EBxevdTmX9SSM0NAOPyIbR2Uo',
+  client_id: '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com',
+  client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi',
+  grant_type: 'refresh_token',
+  scope: 'email https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/cloudplatformprojects.readonly https://www.googleapis.com/auth/firebase openid' } 
+ Fri Jul 20 2018 22:06:38 GMT+0300 (Arab Standard Time)
+[debug] [2018-07-20T19:06:38.780Z] <<< HTTP RESPONSE 200
+[debug] [2018-07-20T19:06:38.819Z] >>> HTTP REQUEST GET https://admin.firebase.com/v1/projects/trackingbuddy-3bebd  
+  
+ Fri Jul 20 2018 22:06:38 GMT+0300 (Arab Standard Time)
+[debug] [2018-07-20T19:06:39.854Z] <<< HTTP RESPONSE 200
+[debug] [2018-07-20T19:06:39.854Z] >>> HTTP REQUEST GET https://admin.firebase.com/v1/database/trackingbuddy-3bebd/tokens  
+  
+ Fri Jul 20 2018 22:06:39 GMT+0300 (Arab Standard Time)
+[debug] [2018-07-20T19:06:40.679Z] <<< HTTP RESPONSE 200

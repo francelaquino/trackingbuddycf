@@ -2,7 +2,8 @@ import * as functions from 'firebase-functions';
 const admin = require('firebase-admin');
 const cors = require("cors")
 const express = require('express');
-const maps = require('@google/maps')/*
+//const maps = require('@google/maps')
+/*
 var googleMapsClient = require('@google/maps').createClient({
     key: 'xxx',
     Promise: Promise
@@ -188,12 +189,12 @@ app.get('/appendLocation', async function (req, res) {
     
     await processPlaceAlert(lat1,lon1,address,userid,firstname);
     await saveLocation(lat1,lon1,address,userid,dateadded);
-    let geocoder = new maps.Geocoder;
+   // let geocoder = new maps.Geocoder;
     let latlng = {lat:  parseFloat(lat1), lng: parseFloat(lon1)};
 
-    geocoder.geocode({'location': latlng}, function(results, status) {
+    /*geocoder.geocode({'location': latlng}, function(results, status) {
         res.send(results);
-      });
+      });*/
         res.send("updated");
 
     
@@ -301,37 +302,30 @@ export const saveLocation = functions.https.onRequest((request, response) => {
     
     
 });
+*/
+app.get('/getLastLocation', async function (req, res) {
+    var registrationToken="dEIg-95Y_xY:APA91bEhFFNwhQWmfPpX0yOj2HG8UuvErxvrJpxlbXqmf-hGm_2b7oMHDMYrRUyKQo46_inBv-C1-z7RB63WADwD2m54Z-wgeBf9ay53GOyGwfb2n7u_ycecV6BEXqSkvxe_Q5gPuHdURd_2e_YqF31gs01X1vIDBA";
 
-export const getLastLocation = functions.https.onRequest((request, response) => {
-    let db = admin.database();
-    let lat2="";
-    let lon2="";
-    
-    return new Promise((resolve,reject)=>{
-        db.ref("memberof/OtTvejsdKGc0HuXqzqHKSCXNgju2").once("value").then(function(snapshot) {
-                snapshot.forEach((userSnap) => {
-                    db.ref("users/OtTvejsdKGc0HuXqzqHKSCXNgju2/members").child(userSnap.key).update({
-                        lastupdate : Date.now()
-                    })
-                });
-            resolve();
-           
-        });
-    }).then(function(){
-        response.send("");
-
-    });
-
-
-    /*let db = admin.database();
-    let lat2="";
-    let lon2="";
-    
-    return new Promise((resolve,reject)=>{
-        db.ref("users/0VuGZSMEJGUDW13nmkucYeNQkVo2").once("value").then(function(snapshot) {
-               resolve(snapshot.val().latitude);
-        });
-    }).then(function(snapshot){
-        response.send(snapshot);
-    });*/
-//});
+    var payload = {
+        notification: {
+          title: "Places Movement",
+          body: "This is the body of the notification message."
+        }
+      };
+      
+       var options = {
+        priority: "high",
+        sound: "default",
+        timeToLive: 60 * 60 *24
+      };
+      
+      admin.messaging().sendToDevice(registrationToken, payload, options)
+      .then(function(response) {
+        console.log("Successfully sent message:", response);
+      })
+      .catch(function(error) {
+        console.log("Error sending message:", error);
+      });
+     
+        res.send("Location saved");
+});
