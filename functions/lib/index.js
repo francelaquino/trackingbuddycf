@@ -140,6 +140,7 @@ const processPlaceAlert = (lat1, lon1, address, userid, firstname) => __awaiter(
 const saveLocation = (lat1, lon1, address, userid, dateadded) => __awaiter(this, void 0, void 0, function* () {
     let lat2 = "";
     let lon2 = "";
+    console.log(address);
     yield db.ref("users/" + userid).once("value").then(function (snapshot) {
         if (snapshot.val() !== null && snapshot.val().latitude !== undefined && snapshot.val().longitude !== undefined) {
             lat2 = snapshot.val().latitude;
@@ -185,10 +186,26 @@ app.get('/appendLocation', function (req, res) {
         let userid = req.query.userid;
         let dateadded = req.query.dateadded;
         let firstname = req.query.firstname;
-        let address = yield getGeoLocation(Number(lat1), Number(lon1));
-        yield processPlaceAlert(lat1, lon1, address, userid, firstname);
-        yield saveLocation(lat1, lon1, address, userid, dateadded);
-        let latlng = { lat: parseFloat(lat1), lng: parseFloat(lon1) };
+        let address = "";
+        let options = {
+            provider: 'google',
+            httpAdapter: 'https',
+            apiKey: 'AIzaSyCHZ-obEHL8TTP4_8vPfQKAyzvRrrlmi5Q',
+            formatter: null
+        };
+        let geocoder = NodeGeocoder(options);
+        yield geocoder.reverse({ lat: lat1, lon: lon1 })
+            .then(function (response) {
+            return __awaiter(this, void 0, void 0, function* () {
+                address = response[0].formattedAddress;
+                yield processPlaceAlert(lat1, lon1, address, userid, firstname);
+                yield saveLocation(lat1, lon1, address, userid, dateadded);
+            });
+        })
+            .catch(function (err) {
+            address = "";
+        });
+        console.log(address);
         res.send("updated");
     });
 });

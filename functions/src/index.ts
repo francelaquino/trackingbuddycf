@@ -140,7 +140,7 @@ const saveLocation=async (lat1,lon1,address,userid,dateadded)=>{
     let lon2="";
 
    
-    
+    console.log(address)
     await db.ref("users/"+userid).once("value").then(function(snapshot) {
             if(snapshot.val()!==null && snapshot.val().latitude!==undefined && snapshot.val().longitude!==undefined){
                 lat2=snapshot.val().latitude;
@@ -189,12 +189,25 @@ app.get('/appendLocation', async function (req, res) {
     let userid=req.query.userid;
     let dateadded=req.query.dateadded;
     let firstname=req.query.firstname;
+    let address="";
 
-    let address = await getGeoLocation(Number(lat1),Number(lon1));
-    
-    await processPlaceAlert(lat1,lon1,address,userid,firstname);
-    await saveLocation(lat1,lon1,address,userid,dateadded);
-    let latlng = {lat:  parseFloat(lat1), lng: parseFloat(lon1)};
+    let options = {
+        provider: 'google',
+        httpAdapter: 'https', 
+        apiKey: 'AIzaSyCHZ-obEHL8TTP4_8vPfQKAyzvRrrlmi5Q', 
+        formatter: null
+      };
+      let geocoder = NodeGeocoder(options);
+      await geocoder.reverse({lat:lat1, lon:lon1})
+        .then(async function(response) {
+            address = response[0].formattedAddress;
+            await processPlaceAlert(lat1,lon1,address,userid,firstname);
+            await saveLocation(lat1,lon1,address,userid,dateadded);
+        })
+        .catch(function(err) {
+            address="";
+        });
+   
     res.send("updated");
 
     
@@ -260,28 +273,9 @@ app.get('/getLastLocation', async function (req, res) {
 
 });
 
-app.get('/getLastLocation1', async function (req, res) {
-    var options = {
-        provider: 'google',
-        httpAdapter: 'https', // Default
-        apiKey: 'AIzaSyCHZ-obEHL8TTP4_8vPfQKAyzvRrrlmi5Q', // for Mapquest, OpenCage, Google Premier
-        formatter: null         // 'gpx', 'string', ...
-      };
-      var geocoder = NodeGeocoder(options);
-      geocoder.reverse({lat:45.767, lon:4.833})
-  .then(function(response) {
-    console.log(response);
-    console.log(response[0].formattedAddress)
-  })
-  .catch(function(err) {
-    console.log(err);
-  });
 
-   
-      res.send("Done");
-        
 
-});
+ 
 
 const api = functions.https.onRequest(app)
 
