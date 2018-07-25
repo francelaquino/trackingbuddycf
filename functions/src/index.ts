@@ -48,91 +48,147 @@ const getDistance=(lat1,long1,lat2,long2) => {
   const processPlaceAlert=async (lat1,lon1,address,userid,firstname)=>{
     let placeArriveNotify:any=[];
     let placeLeftNotify:any=[];
-    await db.ref("placealert/"+userid).once("value").then(async function(snapshot) {
-        await snapshot.forEach((childSnapshot) =>{
-            if(childSnapshot.val().arrives==true){
-                let distance= getDistance(Number(lat1),Number(lon1),Number(childSnapshot.val().latitude),Number(childSnapshot.val().longitude));
-                if(Number(distance)<=10){
-                    placeArriveNotify.push({
-                        placeowner : childSnapshot.val().placeowner,
-                        placeid : childSnapshot.val().placeid,
-                        latitude : childSnapshot.val().latitude,
-                        longitude : childSnapshot.val().longitude,
-                        userid : userid
-                    })
-                   
-                }
-            }
-            if(childSnapshot.val().leaves==true){
-                placeLeftNotify.push({
-                    placeowner : childSnapshot.val().placeowner,
-                    placeid : childSnapshot.val().placeid,
-                    latitude : childSnapshot.val().latitude,
-                    longitude : childSnapshot.val().longitude,
-                    userid : userid
-                })
-            }
-        });
-    });
+    let fcmtoken="";
+    
+    let count=0;
+    let cnt=0;
+    return new Promise((resolve) => {
+        db.ref("placealert/"+userid).once("value").then(async function(snapshot) {
         
-        if(placeArriveNotify.length>0){
-            await placeArriveNotify.forEach(async place => {
-                await db.ref('placeshistory/'+place.placeowner+'/'+place.userid+'/'+place.placeid).once("value", async function(dataSnapshot) {
-                    if(dataSnapshot.val()==null){
-                        await db.ref('placeshistory/'+place.placeowner+'/'+place.userid+'/'+place.placeid).set({ 
-                            address : address,
-                            latitude : place.latitude,
-                            longitude : place.longitude,
-                            arrives : true,
-                            leaves : false,
-                            datearrived :  Date.now()});
-
-                            await db.ref('places/'+place.placeowner+'/'+place.placeid).once("value", async function(placeSnapshot) {
-
-                                let message=firstname+" arrives "+placeSnapshot.val().placename;
-
-                                await db.ref('notification/placealert/'+place.placeowner).push({ 
-                                    placename : placeSnapshot.val().placename,
-                                    address : placeSnapshot.val().address,
-                                    message : message,
-                                    action : 'arrives',
-                                    dateadded :  Date.now()
-                                    });
-
-                            });
-                    
+            if(snapshot.numChildren()<=0){
+                resolve()
+            }else{
+                
+                count=snapshot.numChildren();
+                snapshot.forEach((childSnapshot) =>{
+                    let childPromise= new Promise((childResolve) => {
                         
-                   
-                    }
+                        db.ref('users/'+childSnapshot.val().placeowner).once("value", async function(fcmtokenSnapshot) {
+                         if(fcmtokenSnapshot.val()!==null){
+                                fcmtoken = fcmtokenSnapshot.val().fcmtoken;
+                                if(childSnapshot.val().arrives===true){
+
+                                    let distance= getDistance(Number(lat1),Number(lon1),Number(childSnapshot.val().latitude),Number(childSnapshot.val().longitude));
+                                    if(Number(distance)<=10){
+                                        
+                                            placeArriveNotify.push({
+                                                placeowner : childSnapshot.val().placeowner,
+                                                fcmtoken : fcmtoken,
+                                                placeid : childSnapshot.val().placeid,
+                                                latitude : childSnapshot.val().latitude,
+                                                longitude : childSnapshot.val().longitude,
+                                                userid : userid
+                                            })
+                                        
+                                    }
+                                }
+                                if(childSnapshot.val().leaves===true){
+                                    placeLeftNotify.push({
+                                        fcmtoken : fcmtoken,
+                                        placeowner : childSnapshot.val().placeowner,
+                                        placeid : childSnapshot.val().placeid,
+                                        latitude : childSnapshot.val().latitude,
+                                        longitude : childSnapshot.val().longitude,
+                                        userid : userid
+                                    })
+                                }
+                            }
+                            childResolve()
+                            
+                        });
+                    
+                    }).then(function() {
+                        cnt++;
+                        if(cnt>=count){
+                            resolve()
+                        }
+                    });
+
+                    
                 
                 });
-            })
-         }
-        if(placeLeftNotify.length>0){
+            }
+        });
+    }).then(async function() {
+    
+            
             await placeLeftNotify.forEach(async place => {
-                await db.ref('placeshistory/'+place.placeowner+'/'+place.userid+'/'+place.placeid).once("value", async function(dataSnapshot) {
-                    if(dataSnapshot.val()!==null){
-                        let distance= getDistance(Number(lat1),Number(lon1),Number(dataSnapshot.val().latitude),Number(dataSnapshot.val().longitude));
+                await db.ref('placeshistory/'+place.placeowner+'/'+place.userid+'/'+place.placeid).once("value", async function(leavedataSnapshot) {
+                    if(leavedataSnapshot.val()!==null){
+                        let distance= getDistance(Number(lat1),Number(lon1),Number(leavedataSnapshot.val().latitude),Number(leavedataSnapshot.val().longitude));
                         if(Number(distance)>11){
                             await db.ref('places/'+place.placeowner+'/'+place.placeid).once("value", async function(placeSnapshot) {
 
-                                let message=firstname+" leaves "+placeSnapshot.val().placename;
-
-                                await db.ref('notification/placealert/'+place.placeowner).push({ 
-                                    placename : placeSnapshot.val().placename,
-                                    address : placeSnapshot.val().address,
-                                    message : message,
-                                    action : 'leaves',
-                                    dateadded :  Date.now()
-                                    });
+                                let alert=firstname+" leaves "+placeSnapshot.val().placename;
                                 
                                 await db.ref('placeshistory/'+place.placeowner+'/'+place.userid+'/'+place.placeid).remove();
+
+                                let message = {
+                                    notification: {
+                                    body: alert
+                                    }
+                                };
+                                
+                                let options = {
+                                        priority: "high",
+                                        sound: "default",
+                                        timeToLive: 60 * 60 *24
+                                };
+                                
+                                admin.messaging().sendToDevice(place.fcmtoken, message, options)
+                                .then(function(response) {
+                                    console.log("")
+                                })
+                                .catch(function(error) {
+                                    console.log("")
+                                });
                             });
                         }
                     }
                 });
             });
-        }
+
+            await setTimeout(async () => {
+                await placeArriveNotify.forEach(async place => {
+                    await db.ref('placeshistory/'+place.placeowner+'/'+place.userid+'/'+place.placeid).once("value", async function(arrivedataSnapshot) {
+                        if(arrivedataSnapshot.val()===null){
+                            await db.ref('placeshistory/'+place.placeowner+'/'+place.userid+'/'+place.placeid).set({ 
+                                address : address,
+                                latitude : place.latitude,
+                                longitude : place.longitude,
+                                arrives : true,
+                                leaves : false,
+                                datearrived :  Date.now()});
+    
+                                await db.ref('places/'+place.placeowner+'/'+place.placeid).once("value", async function(placeSnapshot) {
+                                    let alert=firstname+" arrives "+placeSnapshot.val().placename;
+                                        let message = {
+                                            notification: {
+                                            body: alert
+                                            }
+                                        };
+                                        
+                                        let options = {
+                                                priority: "high",
+                                                sound: "default",
+                                                timeToLive: 60 * 60 *24
+                                        };
+                                        
+                                        admin.messaging().sendToDevice(place.fcmtoken, message, options)
+                                        .then(function(response) {
+                                            console.log("")
+                                        })
+                                        .catch(function(error) {
+                                            console.log("")
+                                        });
+                                });
+                       
+                        }
+                    
+                    });
+                })
+            }, 3000);
+    })
 }
 
 const saveLocation=async (lat1,lon1,address,userid,dateadded)=>{
@@ -140,7 +196,6 @@ const saveLocation=async (lat1,lon1,address,userid,dateadded)=>{
     let lon2="";
 
    
-    console.log(address)
     await db.ref("users/"+userid).once("value").then(function(snapshot) {
             if(snapshot.val()!==null && snapshot.val().latitude!==undefined && snapshot.val().longitude!==undefined){
                 lat2=snapshot.val().latitude;
@@ -163,6 +218,17 @@ const saveLocation=async (lat1,lon1,address,userid,dateadded)=>{
                     lastmovement : dateadded
                 })
 
+                await db.ref("memberof/"+userid).once("value").then(function(snapshot) {
+                    snapshot.forEach((userSnap) => {
+                        db.ref("users/"+userSnap.val().userid+"/members/"+userid).set({
+                            lastmovement : Date.now(),
+                            userid : userid
+                        })
+                    });
+                    
+               
+            });
+
         }else{
                 let distance = await getDistance(Number(lat1),Number(lon1),Number(lat2),Number(lon2));
                 
@@ -179,6 +245,14 @@ const saveLocation=async (lat1,lon1,address,userid,dateadded)=>{
                             latitude:lat1,
                             longitude:lon1,
                             lastmovement : dateadded
+                        })
+                        await db.ref("memberof/"+userid).once("value").then(function(snapshot) {
+                            snapshot.forEach((userSnap) => {
+                                db.ref("users/"+userSnap.val().userid+"/members/"+userid).set({
+                                    lastmovement : Date.now(),
+                                    userid : userid
+                                })
+                            });
                         })
                 }
         }

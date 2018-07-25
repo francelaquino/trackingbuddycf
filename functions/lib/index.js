@@ -53,94 +53,142 @@ const getGeoLocation = (latitude, longtitude) => __awaiter(this, void 0, void 0,
 const processPlaceAlert = (lat1, lon1, address, userid, firstname) => __awaiter(this, void 0, void 0, function* () {
     let placeArriveNotify = [];
     let placeLeftNotify = [];
-    yield db.ref("placealert/" + userid).once("value").then(function (snapshot) {
-        return __awaiter(this, void 0, void 0, function* () {
-            yield snapshot.forEach((childSnapshot) => {
-                if (childSnapshot.val().arrives == true) {
-                    let distance = getDistance(Number(lat1), Number(lon1), Number(childSnapshot.val().latitude), Number(childSnapshot.val().longitude));
-                    if (Number(distance) <= 10) {
-                        placeArriveNotify.push({
-                            placeowner: childSnapshot.val().placeowner,
-                            placeid: childSnapshot.val().placeid,
-                            latitude: childSnapshot.val().latitude,
-                            longitude: childSnapshot.val().longitude,
-                            userid: userid
-                        });
-                    }
+    let fcmtoken = "";
+    let count = 0;
+    let cnt = 0;
+    return new Promise((resolve) => {
+        db.ref("placealert/" + userid).once("value").then(function (snapshot) {
+            return __awaiter(this, void 0, void 0, function* () {
+                if (snapshot.numChildren() <= 0) {
+                    resolve();
                 }
-                if (childSnapshot.val().leaves == true) {
-                    placeLeftNotify.push({
-                        placeowner: childSnapshot.val().placeowner,
-                        placeid: childSnapshot.val().placeid,
-                        latitude: childSnapshot.val().latitude,
-                        longitude: childSnapshot.val().longitude,
-                        userid: userid
+                else {
+                    count = snapshot.numChildren();
+                    snapshot.forEach((childSnapshot) => {
+                        let childPromise = new Promise((childResolve) => {
+                            db.ref('users/' + childSnapshot.val().placeowner).once("value", function (fcmtokenSnapshot) {
+                                return __awaiter(this, void 0, void 0, function* () {
+                                    if (fcmtokenSnapshot.val() !== null) {
+                                        fcmtoken = fcmtokenSnapshot.val().fcmtoken;
+                                        if (childSnapshot.val().arrives === true) {
+                                            let distance = getDistance(Number(lat1), Number(lon1), Number(childSnapshot.val().latitude), Number(childSnapshot.val().longitude));
+                                            if (Number(distance) <= 10) {
+                                                placeArriveNotify.push({
+                                                    placeowner: childSnapshot.val().placeowner,
+                                                    fcmtoken: fcmtoken,
+                                                    placeid: childSnapshot.val().placeid,
+                                                    latitude: childSnapshot.val().latitude,
+                                                    longitude: childSnapshot.val().longitude,
+                                                    userid: userid
+                                                });
+                                            }
+                                        }
+                                        if (childSnapshot.val().leaves === true) {
+                                            placeLeftNotify.push({
+                                                fcmtoken: fcmtoken,
+                                                placeowner: childSnapshot.val().placeowner,
+                                                placeid: childSnapshot.val().placeid,
+                                                latitude: childSnapshot.val().latitude,
+                                                longitude: childSnapshot.val().longitude,
+                                                userid: userid
+                                            });
+                                        }
+                                    }
+                                    childResolve();
+                                });
+                            });
+                        }).then(function () {
+                            cnt++;
+                            if (cnt >= count) {
+                                resolve();
+                            }
+                        });
                     });
                 }
             });
         });
-    });
-    if (placeArriveNotify.length > 0) {
-        yield placeArriveNotify.forEach((place) => __awaiter(this, void 0, void 0, function* () {
-            yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).once("value", function (dataSnapshot) {
-                return __awaiter(this, void 0, void 0, function* () {
-                    if (dataSnapshot.val() == null) {
-                        yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).set({
-                            address: address,
-                            latitude: place.latitude,
-                            longitude: place.longitude,
-                            arrives: true,
-                            leaves: false,
-                            datearrived: Date.now()
-                        });
-                        yield db.ref('places/' + place.placeowner + '/' + place.placeid).once("value", function (placeSnapshot) {
-                            return __awaiter(this, void 0, void 0, function* () {
-                                let message = firstname + " arrives " + placeSnapshot.val().placename;
-                                yield db.ref('notification/placealert/' + place.placeowner).push({
-                                    placename: placeSnapshot.val().placename,
-                                    address: placeSnapshot.val().address,
-                                    message: message,
-                                    action: 'arrives',
-                                    dateadded: Date.now()
-                                });
-                            });
-                        });
-                    }
-                });
-            });
-        }));
-    }
-    if (placeLeftNotify.length > 0) {
-        yield placeLeftNotify.forEach((place) => __awaiter(this, void 0, void 0, function* () {
-            yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).once("value", function (dataSnapshot) {
-                return __awaiter(this, void 0, void 0, function* () {
-                    if (dataSnapshot.val() !== null) {
-                        let distance = getDistance(Number(lat1), Number(lon1), Number(dataSnapshot.val().latitude), Number(dataSnapshot.val().longitude));
-                        if (Number(distance) > 11) {
-                            yield db.ref('places/' + place.placeowner + '/' + place.placeid).once("value", function (placeSnapshot) {
-                                return __awaiter(this, void 0, void 0, function* () {
-                                    let message = firstname + " leaves " + placeSnapshot.val().placename;
-                                    yield db.ref('notification/placealert/' + place.placeowner).push({
-                                        placename: placeSnapshot.val().placename,
-                                        address: placeSnapshot.val().address,
-                                        message: message,
-                                        action: 'leaves',
-                                        dateadded: Date.now()
+    }).then(function () {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield placeLeftNotify.forEach((place) => __awaiter(this, void 0, void 0, function* () {
+                yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).once("value", function (leavedataSnapshot) {
+                    return __awaiter(this, void 0, void 0, function* () {
+                        if (leavedataSnapshot.val() !== null) {
+                            let distance = getDistance(Number(lat1), Number(lon1), Number(leavedataSnapshot.val().latitude), Number(leavedataSnapshot.val().longitude));
+                            if (Number(distance) > 11) {
+                                yield db.ref('places/' + place.placeowner + '/' + place.placeid).once("value", function (placeSnapshot) {
+                                    return __awaiter(this, void 0, void 0, function* () {
+                                        let alert = firstname + " leaves " + placeSnapshot.val().placename;
+                                        yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).remove();
+                                        let message = {
+                                            notification: {
+                                                body: alert
+                                            }
+                                        };
+                                        let options = {
+                                            priority: "high",
+                                            sound: "default",
+                                            timeToLive: 60 * 60 * 24
+                                        };
+                                        admin.messaging().sendToDevice(place.fcmtoken, message, options)
+                                            .then(function (response) {
+                                            console.log("");
+                                        })
+                                            .catch(function (error) {
+                                            console.log("");
+                                        });
                                     });
-                                    yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).remove();
                                 });
-                            });
+                            }
                         }
-                    }
+                    });
                 });
-            });
-        }));
-    }
+            }));
+            yield setTimeout(() => __awaiter(this, void 0, void 0, function* () {
+                yield placeArriveNotify.forEach((place) => __awaiter(this, void 0, void 0, function* () {
+                    yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).once("value", function (arrivedataSnapshot) {
+                        return __awaiter(this, void 0, void 0, function* () {
+                            if (arrivedataSnapshot.val() === null) {
+                                yield db.ref('placeshistory/' + place.placeowner + '/' + place.userid + '/' + place.placeid).set({
+                                    address: address,
+                                    latitude: place.latitude,
+                                    longitude: place.longitude,
+                                    arrives: true,
+                                    leaves: false,
+                                    datearrived: Date.now()
+                                });
+                                yield db.ref('places/' + place.placeowner + '/' + place.placeid).once("value", function (placeSnapshot) {
+                                    return __awaiter(this, void 0, void 0, function* () {
+                                        let alert = firstname + " arrives " + placeSnapshot.val().placename;
+                                        let message = {
+                                            notification: {
+                                                body: alert
+                                            }
+                                        };
+                                        let options = {
+                                            priority: "high",
+                                            sound: "default",
+                                            timeToLive: 60 * 60 * 24
+                                        };
+                                        admin.messaging().sendToDevice(place.fcmtoken, message, options)
+                                            .then(function (response) {
+                                            console.log("");
+                                        })
+                                            .catch(function (error) {
+                                            console.log("");
+                                        });
+                                    });
+                                });
+                            }
+                        });
+                    });
+                }));
+            }), 3000);
+        });
+    });
 });
 const saveLocation = (lat1, lon1, address, userid, dateadded) => __awaiter(this, void 0, void 0, function* () {
     let lat2 = "";
     let lon2 = "";
-    console.log(address);
     yield db.ref("users/" + userid).once("value").then(function (snapshot) {
         if (snapshot.val() !== null && snapshot.val().latitude !== undefined && snapshot.val().longitude !== undefined) {
             lat2 = snapshot.val().latitude;
@@ -160,6 +208,14 @@ const saveLocation = (lat1, lon1, address, userid, dateadded) => __awaiter(this,
             longitude: lon1,
             lastmovement: dateadded
         });
+        yield db.ref("memberof/" + userid).once("value").then(function (snapshot) {
+            snapshot.forEach((userSnap) => {
+                db.ref("users/" + userSnap.val().userid + "/members/" + userid).set({
+                    lastmovement: Date.now(),
+                    userid: userid
+                });
+            });
+        });
     }
     else {
         let distance = yield getDistance(Number(lat1), Number(lon1), Number(lat2), Number(lon2));
@@ -175,6 +231,14 @@ const saveLocation = (lat1, lon1, address, userid, dateadded) => __awaiter(this,
                 latitude: lat1,
                 longitude: lon1,
                 lastmovement: dateadded
+            });
+            yield db.ref("memberof/" + userid).once("value").then(function (snapshot) {
+                snapshot.forEach((userSnap) => {
+                    db.ref("users/" + userSnap.val().userid + "/members/" + userid).set({
+                        lastmovement: Date.now(),
+                        userid: userid
+                    });
+                });
             });
         }
     }
@@ -205,7 +269,6 @@ app.get('/appendLocation', function (req, res) {
             .catch(function (err) {
             address = "";
         });
-        console.log(address);
         res.send("updated");
     });
 });
@@ -248,26 +311,6 @@ app.get('/getLastLocation', function (req, res) {
             .then(function (response) {
             console.log(response);
             res.send(response);
-        })
-            .catch(function (err) {
-            console.log(err);
-        });
-        res.send("Done");
-    });
-});
-app.get('/getLastLocation1', function (req, res) {
-    return __awaiter(this, void 0, void 0, function* () {
-        var options = {
-            provider: 'google',
-            httpAdapter: 'https',
-            apiKey: 'AIzaSyCHZ-obEHL8TTP4_8vPfQKAyzvRrrlmi5Q',
-            formatter: null // 'gpx', 'string', ...
-        };
-        var geocoder = NodeGeocoder(options);
-        geocoder.reverse({ lat: 45.767, lon: 4.833 })
-            .then(function (response) {
-            console.log(response);
-            console.log(response[0].formattedAddress);
         })
             .catch(function (err) {
             console.log(err);
