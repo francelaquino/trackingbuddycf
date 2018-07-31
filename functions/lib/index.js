@@ -72,7 +72,7 @@ const processPlaceAlert = (lat1, lon1, address, userid, firstname) => __awaiter(
                                         fcmtoken = fcmtokenSnapshot.val().fcmtoken;
                                         if (childSnapshot.val().arrives === true) {
                                             let distance = getDistance(Number(lat1), Number(lon1), Number(childSnapshot.val().latitude), Number(childSnapshot.val().longitude));
-                                            if (Number(distance) <= 10) {
+                                            if (Number(distance) <= 200) {
                                                 placeArriveNotify.push({
                                                     placeowner: childSnapshot.val().placeowner,
                                                     fcmtoken: fcmtoken,
@@ -210,16 +210,18 @@ const saveLocation = (lat1, lon1, address, userid, dateadded) => __awaiter(this,
         });
         yield db.ref("memberof/" + userid).once("value").then(function (snapshot) {
             snapshot.forEach((userSnap) => {
-                db.ref("users/" + userSnap.val().userid + "/members/" + userid).set({
-                    lastmovement: Date.now(),
-                    userid: userid
-                });
+                if (userSnap.val().userid !== userid) {
+                    db.ref("users/" + userSnap.val().userid + "/members/" + userid).set({
+                        lastmovement: Date.now(),
+                        userid: userid
+                    });
+                }
             });
         });
     }
     else {
         let distance = yield getDistance(Number(lat1), Number(lon1), Number(lat2), Number(lon2));
-        if (Number(distance) >= 10) {
+        if (Number(distance) >= 300) {
             yield db.ref('locations/' + userid).push({
                 lat: lat1,
                 lon: lon1,
@@ -234,10 +236,12 @@ const saveLocation = (lat1, lon1, address, userid, dateadded) => __awaiter(this,
             });
             yield db.ref("memberof/" + userid).once("value").then(function (snapshot) {
                 snapshot.forEach((userSnap) => {
-                    db.ref("users/" + userSnap.val().userid + "/members/" + userid).set({
-                        lastmovement: Date.now(),
-                        userid: userid
-                    });
+                    if (userSnap.val().userid !== userid) {
+                        db.ref("users/" + userSnap.val().userid + "/members/" + userid).set({
+                            lastmovement: Date.now(),
+                            userid: userid
+                        });
+                    }
                 });
             });
         }

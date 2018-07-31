@@ -69,7 +69,7 @@ const getDistance=(lat1,long1,lat2,long2) => {
                                 if(childSnapshot.val().arrives===true){
 
                                     let distance= getDistance(Number(lat1),Number(lon1),Number(childSnapshot.val().latitude),Number(childSnapshot.val().longitude));
-                                    if(Number(distance)<=10){
+                                    if(Number(distance)<=200){
                                         
                                             placeArriveNotify.push({
                                                 placeowner : childSnapshot.val().placeowner,
@@ -204,35 +204,38 @@ const saveLocation=async (lat1,lon1,address,userid,dateadded)=>{
             
         });
     
-        if(lat2=="" || lon2=="" || lat2==undefined || lon2==undefined){
-            await db.ref('locations/'+userid).push({ 
-                lat : lat1,
-                lon : lon1,
-                address : address,
-                dateadded : dateadded});
-            
-            await db.ref("users").child(userid).update({
-                    address:address,
-                    latitude:lat1,
-                    longitude:lon1,
-                    lastmovement : dateadded
-                })
+    if (lat2 == "" || lon2 == "" || lat2 == undefined || lon2 == undefined) {
+        await db.ref('locations/' + userid).push({
+            lat: lat1,
+            lon: lon1,
+            address: address,
+            dateadded: dateadded
+        });
 
-                await db.ref("memberof/"+userid).once("value").then(function(snapshot) {
-                    snapshot.forEach((userSnap) => {
-                        db.ref("users/"+userSnap.val().userid+"/members/"+userid).set({
-                            lastmovement : Date.now(),
-                            userid : userid
-                        })
-                    });
-                    
-               
+        await db.ref("users").child(userid).update({
+            address: address,
+            latitude: lat1,
+            longitude: lon1,
+            lastmovement: dateadded
+        })
+
+        await db.ref("memberof/" + userid).once("value").then(function (snapshot) {
+            snapshot.forEach((userSnap) => {
+                if (userSnap.val().userid !== userid) {
+                    db.ref("users/" + userSnap.val().userid + "/members/" + userid).set({
+                        lastmovement: Date.now(),
+                        userid: userid
+                    })
+                }
             });
 
-        }else{
+
+        });
+
+    }else{
                 let distance = await getDistance(Number(lat1),Number(lon1),Number(lat2),Number(lon2));
                 
-                if(Number(distance)>=10){
+                if(Number(distance)>=300){
                     
                     await db.ref('locations/'+userid).push({ 
                         lat : lat1,
@@ -248,44 +251,46 @@ const saveLocation=async (lat1,lon1,address,userid,dateadded)=>{
                         })
                         await db.ref("memberof/"+userid).once("value").then(function(snapshot) {
                             snapshot.forEach((userSnap) => {
-                                db.ref("users/"+userSnap.val().userid+"/members/"+userid).set({
-                                    lastmovement : Date.now(),
-                                    userid : userid
-                                })
+                                if (userSnap.val().userid !== userid) {
+                                    db.ref("users/" + userSnap.val().userid + "/members/" + userid).set({
+                                        lastmovement: Date.now(),
+                                        userid: userid
+                                    })
+                                }
                             });
                         })
                 }
         }
 }
 app.get('/appendLocation', async function (req, res) {
-    let lat1=req.query.lat;
-    let lon1=req.query.lon;
-    let userid=req.query.userid;
-    let dateadded=req.query.dateadded;
-    let firstname=req.query.firstname;
-    let address="";
+    let lat1 = req.query.lat;
+    let lon1 = req.query.lon;
+    let userid = req.query.userid;
+    let dateadded = req.query.dateadded;
+    let firstname = req.query.firstname;
+    let address = "";
 
     let options = {
         provider: 'google',
-        httpAdapter: 'https', 
-        apiKey: 'AIzaSyCHZ-obEHL8TTP4_8vPfQKAyzvRrrlmi5Q', 
+        httpAdapter: 'https',
+        apiKey: 'AIzaSyCHZ-obEHL8TTP4_8vPfQKAyzvRrrlmi5Q',
         formatter: null
-      };
-      let geocoder = NodeGeocoder(options);
-      await geocoder.reverse({lat:lat1, lon:lon1})
-        .then(async function(response) {
+    };
+    let geocoder = NodeGeocoder(options);
+    await geocoder.reverse({ lat: lat1, lon: lon1 })
+        .then(async function (response) {
             address = response[0].formattedAddress;
-            await processPlaceAlert(lat1,lon1,address,userid,firstname);
-            await saveLocation(lat1,lon1,address,userid,dateadded);
+            await processPlaceAlert(lat1, lon1, address, userid, firstname);
+            await saveLocation(lat1, lon1, address, userid, dateadded);
         })
-        .catch(function(err) {
-            address="";
+        .catch(function (err) {
+            address = "";
         });
-   
+
     res.send("updated");
 
-    
- })
+
+})
 
 
 
@@ -325,25 +330,25 @@ app.get('/sendNotification', async function (req, res) {
 app.get('/getLastLocation', async function (req, res) {
     var options = {
         provider: 'google',
-      
+
         // Optional depending on the providers
         httpAdapter: 'https', // Default
         apiKey: 'AIzaSyCHZ-obEHL8TTP4_8vPfQKAyzvRrrlmi5Q', // for Mapquest, OpenCage, Google Premier
         formatter: null         // 'gpx', 'string', ...
-      };
-      var geocoder = NodeGeocoder(options);
-      geocoder.reverse({lat:45.767, lon:4.833})
-  .then(function(response) {
-    console.log(response);
-    res.send(response);
-  })
-  .catch(function(err) {
-    console.log(err);
-  });
+    };
+    var geocoder = NodeGeocoder(options);
+    geocoder.reverse({ lat: 45.767, lon: 4.833 })
+        .then(function (response) {
+            console.log(response);
+            res.send(response);
+        })
+        .catch(function (err) {
+            console.log(err);
+        });
 
-   
-      res.send("Done");
-        
+
+    res.send("Done");
+
 
 });
 
@@ -354,5 +359,5 @@ app.get('/getLastLocation', async function (req, res) {
 const api = functions.https.onRequest(app)
 
 module.exports = {
-  api
+    api
 }
